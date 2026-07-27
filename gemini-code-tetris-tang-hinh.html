@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Tetris - Enter/Space Restart on Game Over</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #1a1a2e;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 15px;
+        }
+
+        /* Khung chứa 3 khối cột chính */
+        .container {
+            display: flex;
+            gap: 20px;
+            background-color: #16213e;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            align-items: stretch;
+        }
+
+        /* Khối 1 (Trái): Nơi chơi game */
+        .game-panel {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #0f3460;
+            border: 3px solid #0f3460;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .main-board {
+            display: block;
+            background-color: #0f3460;
+        }
+
+        /* Khối 2 (Giữa): Chỉ số, Option và Điều khiển */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-width: 170px;
+            gap: 10px;
+        }
+
+        /* Khối 3 (Phải): Bảng Xếp Hạng Top 10 */
+        .leaderboard-panel {
+            background-color: #0f3460;
+            padding: 15px;
+            border-radius: 8px;
+            min-width: 190px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .leaderboard-panel h3 {
+            font-size: 13px;
+            color: #e94560;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            text-align: center;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 6px;
+        }
+
+        .leaderboard-list {
+            list-style: none;
+            padding: 0;
+            font-size: 13px;
+            flex-grow: 1;
+        }
+
+        .leaderboard-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .leaderboard-list li:nth-child(1) { color: #ffd700; font-weight: bold; }
+        .leaderboard-list li:nth-child(2) { color: #c0c0c0; font-weight: bold; }
+        .leaderboard-list li:nth-child(3) { color: #cd7f32; font-weight: bold; }
+
+        .info-box {
+            background-color: #0f3460;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        .info-box h3 {
+            font-size: 11px;
+            color: #e94560;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .info-box p {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .options-group {
+            background-color: #0f3460;
+            padding: 10px;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .mode-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .mode-option input {
+            cursor: pointer;
+            accent-color: #e94560;
+            width: 14px;
+            height: 14px;
+        }
+
+        .mode-option.sub-option {
+            padding-left: 14px;
+            color: #ccc;
+            font-size: 10px;
+        }
+
+        .mode-option.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .btn {
+            background-color: #e94560;
+            color: white;
+            border: none;
+            padding: 9px 12px;
+            font-size: 13px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            width: 100%;
+            text-align: center;
+        }
+
+        .btn:hover {
+            background-color: #c0354d;
+        }
+
+        .btn-secondary {
+            background-color: #4e5482;
+        }
+
+        .btn-secondary:hover {
+            background-color: #3b3f63;
+        }
+
+        /* --- STYLES CHO CÁC MODAL POPUP NẰM GIỮA MÀN HÌNH --- */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(2px);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: #16213e;
+            border: 2px solid #e94560;
+            padding: 22px;
+            border-radius: 10px;
+            width: 300px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+            animation: modalFadeIn 0.2s ease-out;
+        }
+
+        @keyframes modalFadeIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .modal-content h2 {
+            color: #e94560;
+            font-size: 16px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+
+        .modal-content p {
+            font-size: 13px;
+            color: #ddd;
+            line-height: 1.5;
+            margin-bottom: 18px;
+        }
+
+        .modal-controls-list {
+            text-align: left;
+            font-size: 13px;
+            line-height: 1.8;
+            color: #ddd;
+            margin-bottom: 15px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Responsive Mobile */
+        @media (max-width: 680px) {
+            .container {
+                flex-direction: column;
+                align-items: center;
+            }
+            .sidebar, .leaderboard-panel, .game-panel {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="game-panel">
+        <canvas id="tetris" class="main-board"></canvas>
+    </div>
+    
+    <div class="sidebar">
+        <div>
+            <div class="info-box">
+                <h3>Khối tiếp theo</h3>
+                <canvas id="next" style="display: block; margin: 0 auto;"></canvas>
+            </div>
+            <div class="info-box">
+                <h3>Điểm số</h3>
+                <p id="score">0</p>
+            </div>
+            <div class="info-box">
+                <h3>Cấp độ</h3>
+                <p id="level">1</p>
+            </div>
+            <div class="info-box">
+                <h3>Hàng đã xóa</h3>
+                <p id="lines">0</p>
+            </div>
+
+            <div class="options-group">
+                <label class="mode-option">
+                    <input type="checkbox" id="invisible-mode">
+                    <span>👻 Mode Tàng Hình</span>
+                </label>
+                <label class="mode-option sub-option disabled" id="flash-option-label">
+                    <input type="checkbox" id="flash-mode" disabled>
+                    <span>⚡ Hiện 0.1s khi hạ khối</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <button id="controls-btn" class="btn btn-secondary">🎮 Hướng dẫn</button>
+            <button id="start-btn" class="btn">Chơi mới (Phím 0)</button>
+        </div>
+    </div>
+
+    <div class="leaderboard-panel">
+        <div>
+            <h3>🏆 Top 10 Điểm Cao</h3>
+            <ol id="leaderboard" class="leaderboard-list">
+                </ol>
+        </div>
+        <button id="clear-scores-btn" class="btn btn-secondary" style="font-size: 11px;">Xóa Xếp Hạng</button>
+    </div>
+</div>
+
+<div class="modal-overlay" id="controls-modal">
+    <div class="modal-content">
+        <h2>🎮 Hướng Dẫn Điều Khiển</h2>
+        <div class="modal-controls-list">
+            <p><b>← →</b> : Di chuyển Trái / Phải</p>
+            <p><b>↑</b> : Xoay khối gạch</p>
+            <p><b>↓</b> : Tăng tốc rơi</p>
+            <p><b>Space</b> : Thả khối xuống ngay</p>
+            <p><b>P</b> : Tạm dừng game</p>
+            <p><b>Phím 0</b> : Chơi game mới</p>
+            <p><b>Enter / Space</b> : Chơi lại khi Game Over</p>
+        </div>
+        <button id="close-controls-modal-btn" class="btn">Đóng</button>
+    </div>
+</div>
+
+<div class="modal-overlay" id="confirm-modal">
+    <div class="modal-content">
+        <h2>⚠️ Xác Nhận Chơi Mới</h2>
+        <p>Bạn đã bắt đầu trò chơi. Bạn có chắc chắn muốn hủy ván này và chơi lại không?</p>
+        <div class="modal-actions">
+            <button id="confirm-yes-btn" class="btn">Chơi mới</button>
+            <button id="confirm-no-btn" class="btn btn-secondary">Hủy bỏ</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="gameover-modal">
+    <div class="modal-content">
+        <h2>💀 GAME OVER!</h2>
+        <p>Thành tích của bạn: <br><b id="final-score" style="font-size: 22px; color: #ffd700;">0</b> điểm</p>
+        <p style="font-size: 11px; color: #aaa; margin-bottom: 12px;">(Nhấn <b>Enter</b> hoặc <b>Space</b> để chơi lại)</p>
+        <button id="restart-game-btn" class="btn">Chơi Lại</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('tetris');
+    const context = canvas.getContext('2d');
+    const nextCanvas = document.getElementById('next');
+    const nextContext = nextCanvas.getContext('2d');
+
+    const BOARD_WIDTH = 10;
+    const BOARD_HEIGHT = 15;
+    let GRID_SIZE = 25;
+
+    const colors = [
+        null,
+        '#FF0D72', '#0DC2FF', '#0DFF72', '#F538FF', '#FF8E0D', '#FFE138', '#3877FF'
+    ];
+
+    function updateResponsiveCanvasSize() {
+        const isMobile = window.innerWidth <= 680;
+        
+        const availableHeight = window.innerHeight - (isMobile ? 250 : 90);
+        const availableWidth = isMobile ? (window.innerWidth - 60) : (window.innerWidth - 460);
+
+        let calculatedGrid = Math.floor(Math.min(availableHeight / BOARD_HEIGHT, availableWidth / BOARD_WIDTH));
+        GRID_SIZE = Math.max(16, Math.min(calculatedGrid, 30));
+
+        canvas.width = BOARD_WIDTH * GRID_SIZE;
+        canvas.height = BOARD_HEIGHT * GRID_SIZE;
+
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.scale(GRID_SIZE, GRID_SIZE);
+
+        const nextGridSize = Math.floor(GRID_SIZE * 0.75);
+        nextCanvas.width = 4 * nextGridSize;
+        nextCanvas.height = 4 * nextGridSize;
+        nextContext.setTransform(1, 0, 0, 1, 0, 0);
+        nextContext.scale(nextGridSize, nextGridSize);
+
+        draw();
+    }
+
+    window.addEventListener('resize', updateResponsiveCanvasSize);
+
+    function createPiece(type) {
+        if (type === 'I') return [[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0]];
+        if (type === 'L') return [[0,2,0],[0,2,0],[0,2,2]];
+        if (type === 'J') return [[0,3,0],[0,3,0],[3,3,0]];
+        if (type === 'O') return [[4,4],[4,4]];
+        if (type === 'Z') return [[5,5,0],[0,5,5],[0,0,0]];
+        if (type === 'S') return [[0,6,6],[6,6,0],[0,0,0]];
+        if (type === 'T') return [[0,7,0],[7,7,7],[0,0,0]];
+    }
+
+    function createMatrix(w, h) {
+        const matrix = [];
+        while (h--) matrix.push(new Array(w).fill(0));
+        return matrix;
+    }
+
+    const arena = createMatrix(BOARD_WIDTH, BOARD_HEIGHT);
+
+    const player = {
+        pos: {x: 0, y: 0},
+        matrix: null,
+        nextMatrix: null,
+        score: 0,
+        lines: 0,
+        level: 1
+    };
+
+    let dropCounter = 0;
+    let dropInterval = 1000;
+    let lastTime = 0;
+    let isPaused = false;
+    let gameOver = false;
+
+    let flashTimer = null;
+    let isFlashing = false;
+
+    const invisibleCheckbox = document.getElementById('invisible-mode');
+    const flashCheckbox = document.getElementById('flash-mode');
+    const flashLabel = document.getElementById('flash-option-label');
+
+    const controlsModal = document.getElementById('controls-modal');
+    const confirmModal = document.getElementById('confirm-modal');
+    const gameoverModal = document.getElementById('gameover-modal');
+
+    invisibleCheckbox.addEventListener('change', () => {
+        if (invisibleCheckbox.checked) {
+            flashCheckbox.disabled = false;
+            flashLabel.classList.remove('disabled');
+        } else {
+            flashCheckbox.disabled = true;
+            flashCheckbox.checked = false;
+            flashLabel.classList.add('disabled');
+            isFlashing = false;
+            if (flashTimer) clearTimeout(flashTimer);
+        }
+    });
+
+    function triggerFlash() {
+        if (!invisibleCheckbox.checked || !flashCheckbox.checked) return;
+
+        isFlashing = true;
+        if (flashTimer) clearTimeout(flashTimer);
+
+        flashTimer = setTimeout(() => {
+            isFlashing = false;
+        }, 100);
+    }
+
+    // --- QUẢN LÝ CÁC POPUP MODAL ---
+    document.getElementById('controls-btn').addEventListener('click', () => {
+        controlsModal.classList.add('active');
+    });
+
+    document.getElementById('close-controls-modal-btn').addEventListener('click', () => {
+        controlsModal.classList.remove('active');
+    });
+
+    document.getElementById('confirm-yes-btn').addEventListener('click', () => {
+        resetGame();
+    });
+
+    document.getElementById('confirm-no-btn').addEventListener('click', () => {
+        confirmModal.classList.remove('active');
+    });
+
+    document.getElementById('restart-game-btn').addEventListener('click', () => {
+        resetGame();
+    });
+
+    // --- TOP 10 LOCALSTORAGE ---
+    function getHighScores() {
+        const scores = localStorage.getItem('tetris_high_scores');
+        return scores ? JSON.parse(scores) : [];
+    }
+
+    function saveHighScore(newScore) {
+        if (newScore <= 0) return;
+        
+        let highScores = getHighScores();
+        highScores.push(newScore);
+        highScores.sort((a, b) => b - a);
+        highScores = highScores.slice(0, 10);
+
+        localStorage.setItem('tetris_high_scores', JSON.stringify(highScores));
+        updateLeaderboardUI();
+    }
+
+    function updateLeaderboardUI() {
+        const leaderboardList = document.getElementById('leaderboard');
+        const highScores = getHighScores();
+        
+        leaderboardList.innerHTML = '';
+
+        if (highScores.length === 0) {
+            leaderboardList.innerHTML = '<li style="justify-content:center; color:#888;">Chưa có điểm</li>';
+            return;
+        }
+
+        highScores.forEach((score, index) => {
+            const li = document.createElement('li');
+            li.innerHTML = `<span>#${index + 1}</span> <span>${score}</span>`;
+            leaderboardList.appendChild(li);
+        });
+    }
+
+    document.getElementById('clear-scores-btn').addEventListener('click', () => {
+        if (confirm("Bạn có chắc muốn xóa toàn bộ bảng xếp hạng Top 10 không?")) {
+            localStorage.removeItem('tetris_high_scores');
+            updateLeaderboardUI();
+        }
+    });
+
+    // --- GAME RENDERING & LOGIC ---
+    function drawGrid(w, h, ctx) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.lineWidth = 0.04;
+
+        for (let x = 0; x <= w; x++) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+        }
+        for (let y = 0; y <= h; y++) {
+            ctx.beginPath();
+            ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+        }
+    }
+
+    function drawMatrix(matrix, offset, ctx = context) {
+        matrix.forEach((row, y) => {
+            row.forEach((value, x) => {
+                if (value !== 0) {
+                    ctx.fillStyle = colors[value];
+                    ctx.fillRect(x + offset.x, y + offset.y, 1, 1);
+                    ctx.lineWidth = 0.04;
+                    ctx.strokeStyle = '#000';
+                    ctx.strokeRect(x + offset.x, y + offset.y, 1, 1);
+                }
+            });
+        });
+    }
+
+    function draw() {
+        context.fillStyle = '#0f3460';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+
+        nextContext.fillStyle = '#0f3460';
+        nextContext.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+
+        drawGrid(BOARD_WIDTH, BOARD_HEIGHT, context);
+        drawGrid(4, 4, nextContext);
+
+        if (!invisibleCheckbox.checked || isFlashing) {
+            drawMatrix(arena, {x: 0, y: 0});
+        }
+
+        drawMatrix(player.matrix, player.pos);
+        
+        if (player.nextMatrix) {
+            const offsetX = (4 - player.nextMatrix[0].length) / 2;
+            const offsetY = (4 - player.nextMatrix.length) / 2;
+            drawMatrix(player.nextMatrix, {x: offsetX, y: offsetY}, nextContext);
+        }
+    }
+
+    function merge(arena, player) {
+        player.matrix.forEach((row, y) => {
+            row.forEach((value, x) => {
+                if (value !== 0) {
+                    arena[y + player.pos.y][x + player.pos.x] = value;
+                }
+            });
+        });
+    }
+
+    function collide(arena, player) {
+        const [m, o] = [player.matrix, player.pos];
+        for (let y = 0; y < m.length; ++y) {
+            for (let x = 0; x < m[y].length; ++x) {
+                if (m[y][x] !== 0 && (arena[y + o.y] && arena[y + o.y][x + o.x]) !== 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function arenaSweep() {
+        let rowCount = 1;
+        outer: for (let y = arena.length - 1; y >= 0; --y) {
+            for (let x = 0; x < arena[y].length; ++x) {
+                if (arena[y][x] === 0) continue outer;
+            }
+
+            const row = arena.splice(y, 1)[0].fill(0);
+            arena.unshift(row);
+            ++y;
+
+            player.score += rowCount * 10;
+            player.lines++;
+            rowCount *= 2;
+
+            player.level = Math.floor(player.lines / 10) + 1;
+            dropInterval = Math.max(100, 1000 - (player.level - 1) * 100);
+        }
+        updateScore();
+    }
+
+    function rotate(matrix, dir) {
+        for (let y = 0; y < matrix.length; ++y) {
+            for (let x = 0; x < y; ++x) {
+                [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
+            }
+        }
+        if (dir > 0) matrix.forEach(row => row.reverse());
+        else matrix.reverse();
+    }
+
+    function playerRotate(dir) {
+        const pos = player.pos.x;
+        let offset = 1;
+        rotate(player.matrix, dir);
+        while (collide(arena, player)) {
+            player.pos.x += offset;
+            offset = -(offset + (offset > 0 ? 1 : -1));
+            if (offset > player.matrix[0].length) {
+                rotate(player.matrix, -dir);
+                player.pos.x = pos;
+                return;
+            }
+        }
+    }
+
+    function playerDrop() {
+        player.pos.y++;
+        if (collide(arena, player)) {
+            player.pos.y--;
+            merge(arena, player);
+            triggerFlash();
+            playerReset();
+            arenaSweep();
+        }
+        dropCounter = 0;
+    }
+
+    function playerHardDrop() {
+        while (!collide(arena, player)) {
+            player.pos.y++;
+        }
+        player.pos.y--;
+        merge(arena, player);
+        triggerFlash();
+        playerReset();
+        arenaSweep();
+        dropCounter = 0;
+    }
+
+    function playerMove(dir) {
+        player.pos.x += dir;
+        if (collide(arena, player)) {
+            player.pos.x -= dir;
+        }
+    }
+
+    function playerReset() {
+        const pieces = 'ILJOTSZ';
+        if (!player.nextMatrix) {
+            player.nextMatrix = createPiece(pieces[pieces.length * Math.random() | 0]);
+        }
+        
+        player.matrix = player.nextMatrix;
+        player.nextMatrix = createPiece(pieces[pieces.length * Math.random() | 0]);
+        player.pos.y = 0;
+        player.pos.x = (arena[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
+
+        if (collide(arena, player)) {
+            gameOver = true;
+            saveHighScore(player.score);
+            
+            document.getElementById('final-score').innerText = player.score;
+            gameoverModal.classList.add('active');
+        }
+    }
+
+    function updateScore() {
+        document.getElementById('score').innerText = player.score;
+        document.getElementById('level').innerText = player.level;
+        document.getElementById('lines').innerText = player.lines;
+    }
+
+    function update(time = 0) {
+        if (isPaused || gameOver) return;
+
+        const deltaTime = time - lastTime;
+        lastTime = time;
+
+        dropCounter += deltaTime;
+        if (dropCounter > dropInterval) {
+            playerDrop();
+        }
+
+        draw();
+        requestAnimationFrame(update);
+    }
+
+    function requestResetGame() {
+        const hasBlocksPlaced = arena.some(row => row.some(cell => cell !== 0));
+
+        if (hasBlocksPlaced && !gameOver) {
+            confirmModal.classList.add('active');
+        } else {
+            resetGame();
+        }
+    }
+
+    document.addEventListener('keydown', event => {
+        // Phím 0: Chơi lại game mới bất kể lúc nào
+        if (event.keyCode === 48 || event.keyCode === 96) {
+            requestResetGame();
+            return;
+        }
+
+        // Xử lý khi màn hình Game Over hiển thị: Nhấn Enter hoặc Space để chơi lại
+        if (gameOver) {
+            if (event.keyCode === 13 || event.keyCode === 32) { // 13: Enter, 32: Space
+                event.preventDefault();
+                resetGame();
+            }
+            return;
+        }
+
+        if (event.keyCode === 80) { // P: Tạm dừng
+            isPaused = !isPaused;
+            if (!isPaused) update();
+            return;
+        }
+
+        if (isPaused) return;
+
+        if (event.keyCode === 37) playerMove(-1);
+        else if (event.keyCode === 39) playerMove(1);
+        else if (event.keyCode === 40) playerDrop();
+        else if (event.keyCode === 38) playerRotate(1);
+        else if (event.keyCode === 32) {
+            event.preventDefault();
+            playerHardDrop();
+        }
+    });
+
+    // Hàm Reset Game chính thức
+    function resetGame() {
+        // Tắt tất cả Modal thông báo đang hiển thị
+        gameoverModal.classList.remove('active');
+        confirmModal.classList.remove('active');
+        controlsModal.classList.remove('active');
+
+        arena.forEach(row => row.fill(0));
+        player.score = 0;
+        player.lines = 0;
+        player.level = 1;
+        dropInterval = 1000;
+        gameOver = false;
+        isPaused = false;
+        isFlashing = false;
+        if (flashTimer) clearTimeout(flashTimer);
+        player.nextMatrix = null;
+        updateScore();
+        playerReset();
+        lastTime = performance.now();
+        update();
+    }
+
+    document.getElementById('start-btn').addEventListener('click', requestResetGame);
+
+    // Khởi tạo
+    updateResponsiveCanvasSize();
+    updateLeaderboardUI();
+    resetGame();
+</script>
+
+</body>
+</html>
