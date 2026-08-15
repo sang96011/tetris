@@ -290,12 +290,12 @@
 
 <div class="container">
     <div class="game-panel">
-        <div class="pause-overlay" id="pause-overlay">
+        <div class="pause-overlay" id="pause-overlay" aria-hidden="false">
             <h2 id="pause-title">🎮 CHỜ BẮT ĐẦU</h2>
             <p id="pause-subtext"><b>H</b> (Hướng dẫn) | <b>M</b> (Tàng hình) | <b>T</b> (Thời gian)<br>Nhấn <b>0 / Enter / Space</b> để chơi</p>
         </div>
 
-        <canvas id="tetris" class="main-board" tabindex="1"></canvas>
+        <canvas id="tetris" class="main-board" tabindex="1" aria-label="Bảng Tetris"></canvas>
 
         <div class="touch-controls">
             <div class="touch-row">
@@ -314,7 +314,7 @@
         <div>
             <div class="info-box">
                 <h3>Khối tiếp theo</h3>
-                <canvas id="next" style="display: block; margin: 0 auto;"></canvas>
+                <canvas id="next" style="display: block; margin: 0 auto;" aria-label="Khối tiếp theo"></canvas>
             </div>
             <div class="info-box" id="timer-box" style="display: none;">
                 <h3>Thời gian</h3>
@@ -358,15 +358,15 @@
     <div class="leaderboard-panel">
         <div>
             <h3>🏆 Top 10 Điểm Cao</h3>
-            <ol id="leaderboard" class="leaderboard-list"></ol>
+            <ol id="leaderboard" class="leaderboard-list" aria-live="polite"></ol>
         </div>
         <button id="clear-scores-btn" class="btn btn-secondary" style="font-size: 11px; margin-top: 10px;">Xóa Xếp Hạng</button>
     </div>
 </div>
 
-<div class="modal-overlay" id="controls-modal">
-    <div class="modal-content">
-        <h2>🎮 Hướng Dẫn Điều Khiển</h2>
+<div class="modal-overlay" id="controls-modal" role="dialog" aria-modal="true" aria-labelledby="controls-title" aria-hidden="true">
+    <div class="modal-content" tabindex="-1">
+        <h2 id="controls-title">🎮 Hướng Dẫn Điều Khiển</h2>
         <div class="modal-controls-list">
             <p><b>← →</b> : Di chuyển Trái / Phải</p>
             <p><b>↑</b> : Xoay khối gạch</p>
@@ -384,9 +384,9 @@
     </div>
 </div>
 
-<div class="modal-overlay" id="confirm-modal">
-    <div class="modal-content">
-        <h2>⚠️ Xác Nhận Chơi Mới</h2>
+<div class="modal-overlay" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-hidden="true">
+    <div class="modal-content" tabindex="-1">
+        <h2 id="confirm-title">⚠️ Xác Nhận Chơi Mới</h2>
         <p style="font-size: 13px; margin-bottom: 15px;">Bạn muốn hủy ván này để chơi lại?</p>
         <div style="display:flex; gap:10px;">
             <button id="confirm-yes-btn" class="btn">Đồng ý</button>
@@ -395,8 +395,8 @@
     </div>
 </div>
 
-<div class="modal-overlay" id="gameover-modal">
-    <div class="modal-content">
+<div class="modal-overlay" id="gameover-modal" role="dialog" aria-modal="true" aria-labelledby="gameover-title" aria-hidden="true">
+    <div class="modal-content" tabindex="-1">
         <h2 id="gameover-title">💀 GAME OVER!</h2>
         <p style="margin: 10px 0;">Thành tích: <b id="final-score" style="font-size: 22px; color: #ffd700;">0</b> điểm</p>
         <button id="back-to-lobby-btn" class="btn">Về Sảnh Chờ</button>
@@ -404,11 +404,14 @@
 </div>
 
 <script>
+(function () {
+    'use strict';
+
     const canvas = document.getElementById('tetris');
     const context = canvas.getContext('2d');
     const nextCanvas = document.getElementById('next');
     const nextContext = nextCanvas.getContext('2d');
-    
+
     const pauseOverlay = document.getElementById('pause-overlay');
     const pauseTitle = document.getElementById('pause-title');
     const pauseSubtext = document.getElementById('pause-subtext');
@@ -422,21 +425,76 @@
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     let audioCtx = null;
 
+    // Persisted settings
+    const STORAGE_KEYS = { HIGH_SCORES: 'tetris_high_scores', SOUND: 'tetris_sound' };
+
+    function safeParseJSON(str) {
+        try { return JSON.parse(str); } catch (e) { return null; }
+    }
+
     function playSound(type) {
         if (!document.getElementById('sound-mode').checked) return;
-        if (!audioCtx) audioCtx = new AudioCtx();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
+        try {
+            if (!audioCtx) audioCtx = new AudioCtx();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
 
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
 
-        if (type === 'move') { osc.frequency.setValueAtTime(200, now); gain.gain.setValueAtTime(0.05, now); osc.start(now); osc.stop(now + 0.05); }
-        else if (type === 'rotate') { osc.frequency.setValueAtTime(400, now); gain.gain.setValueAtTime(0.08, now); osc.start(now); osc.stop(now + 0.08); }
-        else if (type === 'drop') { osc.frequency.setValueAtTime(150, now); gain.gain.setValueAtTime(0.15, now); osc.start(now); osc.stop(now + 0.1); }
-        else if (type === 'clear') { osc.type = 'triangle'; osc.frequency.setValueAtTime(523, now); osc.frequency.setValueAtTime(659, now + 0.08); gain.gain.setValueAtTime(0.2, now); osc.start(now); osc.stop(now + 0.2); }
-        else if (type === 'gameover') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, now); osc.frequency.linearRampToValueAtTime(100, now + 0.4); gain.gain.setValueAtTime(0.2, now); osc.start(now); osc.stop(now + 0.4); }
+            const now = audioCtx.currentTime;
+            gain.gain.setValueAtTime(0, now);
+
+            switch (type) {
+                case 'move':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(250, now);
+                    gain.gain.linearRampToValueAtTime(0.06, now + 0.001);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.07);
+                    osc.start(now); osc.stop(now + 0.08);
+                    break;
+                case 'rotate':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(420, now);
+                    gain.gain.linearRampToValueAtTime(0.08, now + 0.001);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.12);
+                    osc.start(now); osc.stop(now + 0.12);
+                    break;
+                case 'drop':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(160, now);
+                    gain.gain.linearRampToValueAtTime(0.14, now + 0.001);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.12);
+                    osc.start(now); osc.stop(now + 0.12);
+                    break;
+                case 'clear':
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(523, now);
+                    osc.frequency.linearRampToValueAtTime(659, now + 0.08);
+                    gain.gain.linearRampToValueAtTime(0.18, now + 0.001);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.26);
+                    osc.start(now); osc.stop(now + 0.26);
+                    break;
+                case 'gameover':
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.linearRampToValueAtTime(100, now + 0.4);
+                    gain.gain.linearRampToValueAtTime(0.20, now + 0.001);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.5);
+                    osc.start(now); osc.stop(now + 0.5);
+                    break;
+                default:
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(300, now);
+                    gain.gain.linearRampToValueAtTime(0.04, now + 0.001);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.05);
+                    osc.start(now); osc.stop(now + 0.05);
+            }
+        } catch (e) {
+            // audio may be blocked by autoplay policies
+            console.warn('playSound error', e);
+        }
     }
 
     function updateResponsiveCanvasSize() {
@@ -513,12 +571,48 @@
         timerBox.style.display = timeAttackCheckbox.checked ? 'block' : 'none';
     });
 
+    // Focus trap helpers
+    function getFocusableElements(container) {
+        return Array.from(container.querySelectorAll('a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])'))
+            .filter(el => !el.hasAttribute('disabled'));
+    }
+    function trapFocus(modal) {
+        const focusable = getFocusableElements(modal);
+        if (!focusable.length) return;
+        const first = focusable[0], last = focusable[focusable.length - 1];
+        function keydown(e) {
+            if (e.key === 'Tab') {
+                if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+            } else if (e.key === 'Escape') {
+                closeModal(modal);
+            }
+        }
+        modal._keydown = keydown;
+        modal.addEventListener('keydown', keydown);
+        setTimeout(() => first.focus(), 0);
+    }
+    function untrapFocus(modal) {
+        if (modal._keydown) modal.removeEventListener('keydown', modal._keydown);
+        modal._keydown = null;
+    }
+
+    function setPauseSubtextParts(parts) {
+        // parts: array of nodes or strings
+        pauseSubtext.textContent = '';
+        parts.forEach(p => {
+            if (typeof p === 'string') pauseSubtext.appendChild(document.createTextNode(p));
+            else pauseSubtext.appendChild(p);
+        });
+    }
+
     function togglePause() {
         if (gameOver || !gameStarted) return;
         isPaused = !isPaused;
         if (isPaused) {
             pauseTitle.innerText = "⏸️ TẠM DƯNG";
-            pauseSubtext.innerHTML = "Nhấn phím <b>P</b> hoặc click vào đây<br>để tiếp tục chơi";
+            const p1 = document.createElement('b'); p1.textContent = 'P';
+            setPauseSubtextParts(['Nhấn phím ', p1, ' hoặc click vào đây\nđể tiếp tục chơi']);
             pauseOverlay.classList.add('active');
         } else {
             pauseOverlay.classList.remove('active');
@@ -537,14 +631,18 @@
         if (!isPaused && gameStarted && !gameOver) {
             isPaused = true;
             pauseTitle.innerText = "⏸️ TẠM DƯNG";
-            pauseSubtext.innerHTML = "Đang mở cửa sổ tùy chọn";
+            pauseSubtext.textContent = 'Đang mở cửa sổ tùy chọn';
             pauseOverlay.classList.add('active');
         }
         modal.classList.add('active');
+        modal.setAttribute('aria-hidden', 'false');
+        trapFocus(modal);
     }
 
     function closeModal(modal) {
         modal.classList.remove('active');
+        modal.setAttribute('aria-hidden', 'true');
+        untrapFocus(modal);
         if (!wasPausedBeforeModal && gameStarted && !gameOver) {
             isPaused = false;
             pauseOverlay.classList.remove('active');
@@ -563,22 +661,30 @@
 
     document.getElementById('controls-btn').addEventListener('click', () => toggleControlsModal());
     document.getElementById('close-controls-modal-btn').addEventListener('click', () => closeModal(controlsModal));
-    document.getElementById('confirm-yes-btn').addEventListener('click', () => resetGame());
+    document.getElementById('confirm-yes-btn').addEventListener('click', () => { closeModal(confirmModal); resetGame(); });
     document.getElementById('confirm-no-btn').addEventListener('click', () => closeModal(confirmModal));
     document.getElementById('back-to-lobby-btn').addEventListener('click', () => returnToLobby());
 
     function getHighScores() {
-        const scores = localStorage.getItem('tetris_high_scores');
-        return scores ? JSON.parse(scores) : [];
+        const raw = localStorage.getItem(STORAGE_KEYS.HIGH_SCORES);
+        const parsed = safeParseJSON(raw);
+        if (!parsed || !Array.isArray(parsed)) return [];
+        // normalize old data (numbers) to objects
+        return parsed.map(item => {
+            if (typeof item === 'number') return { name: 'Anon', score: item, date: new Date().toISOString() };
+            if (item && typeof item.score === 'number') return item;
+            return null;
+        }).filter(Boolean).sort((a,b) => b.score - a.score).slice(0, 10);
     }
 
     function saveHighScore(newScore) {
-        if (newScore <= 0) return;
-        let highScores = getHighScores();
-        highScores.push(newScore);
-        highScores.sort((a, b) => b - a);
-        highScores = highScores.slice(0, 10);
-        localStorage.setItem('tetris_high_scores', JSON.stringify(highScores));
+        if (typeof newScore !== 'number' || newScore <= 0) return;
+        const name = prompt('Nhập tên để lưu điểm (tối đa 16 ký tự):', 'Người Chơi') || 'Anon';
+        const entry = { name: String(name).slice(0,16), score: newScore, date: new Date().toISOString() };
+        const highScores = getHighScores();
+        highScores.push(entry);
+        highScores.sort((a, b) => b.score - a.score);
+        localStorage.setItem(STORAGE_KEYS.HIGH_SCORES, JSON.stringify(highScores.slice(0,10)));
         updateLeaderboardUI();
     }
 
@@ -587,19 +693,24 @@
         const highScores = getHighScores();
         leaderboardList.innerHTML = '';
         if (highScores.length === 0) {
-            leaderboardList.innerHTML = '<li style="justify-content:center; color:#888;">Chưa có điểm</li>';
+            const li = document.createElement('li');
+            li.style.justifyContent = 'center'; li.style.color = '#888';
+            li.textContent = 'Chưa có điểm';
+            leaderboardList.appendChild(li);
             return;
         }
-        highScores.forEach((score, index) => {
+        highScores.forEach((entry, index) => {
             const li = document.createElement('li');
-            li.innerHTML = `<span>#${index + 1}</span> <span>${score}</span>`;
+            const left = document.createElement('span'); left.textContent = `#${index + 1} ${entry.name}`;
+            const right = document.createElement('span'); right.textContent = `${entry.score}`;
+            li.appendChild(left); li.appendChild(right);
             leaderboardList.appendChild(li);
         });
     }
 
     document.getElementById('clear-scores-btn').addEventListener('click', () => {
         if (confirm("Bạn có chắc muốn xóa toàn bộ bảng xếp hạng Top 10 không?")) {
-            localStorage.removeItem('tetris_high_scores');
+            localStorage.removeItem(STORAGE_KEYS.HIGH_SCORES);
             updateLeaderboardUI();
         }
     });
@@ -751,13 +862,12 @@
         saveHighScore(player.score);
         document.getElementById('gameover-title').innerText = titleText;
         document.getElementById('final-score').innerText = player.score;
-        gameoverModal.classList.add('active');
+        openModal(gameoverModal);
     }
 
     function returnToLobby() {
-        gameoverModal.classList.remove('active');
-        confirmModal.classList.remove('active');
-        controlsModal.classList.remove('active');
+        // close modals safely
+        [gameoverModal, confirmModal, controlsModal].forEach(m => { m.classList.remove('active'); m.setAttribute('aria-hidden', 'true'); untrapFocus(m); });
 
         arena.forEach(row => row.fill(0));
         player.score = 0; player.lines = 0; player.level = 1;
@@ -785,81 +895,79 @@
         draw(); requestAnimationFrame(update);
     }
 
+    // Keyboard handling using event.key
     window.addEventListener('keydown', event => {
-        if ([32, 37, 38, 39, 40].includes(event.keyCode)) {
-            event.preventDefault();
+        const activeTag = document.activeElement && document.activeElement.tagName;
+        const key = event.key;
+        const keyLower = key && key.length === 1 ? key.toLowerCase() : key;
+
+        const controlKeys = [' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+        if (controlKeys.includes(key)) {
+            // prevent scrolling when using controls while game active
+            if (gameStarted && !isPaused) event.preventDefault();
         }
 
-        // Phím H: Bật/Tắt bảng hướng dẫn bất kỳ lúc nào
-        if (event.keyCode === 72 || event.keyCode === 104) {
-            toggleControlsModal();
-            return;
-        }
+        // H or h: toggle controls
+        if (keyLower === 'h') { toggleControlsModal(); return; }
 
-        // Phím Esc: Đóng bảng hướng dẫn nếu đang mở
-        if (event.keyCode === 27 && controlsModal.classList.contains('active')) {
-            closeModal(controlsModal);
-            return;
-        }
+        // Esc closes modal if open
+        if (key === 'Escape' && controlsModal.classList.contains('active')) { closeModal(controlsModal); return; }
 
-        // Phím A: Bật/tắt âm thanh
-        if (event.keyCode === 65 || event.keyCode === 97) {
-            soundCheckbox.checked = !soundCheckbox.checked;
-            return;
-        }
+        // A: toggle audio
+        if (keyLower === 'a') { soundCheckbox.checked = !soundCheckbox.checked; localStorage.setItem(STORAGE_KEYS.SOUND, soundCheckbox.checked ? '1' : '0'); return; }
 
-        const isTriggerKey = (event.keyCode === 48 || event.keyCode === 96 || event.keyCode === 13 || event.keyCode === 32);
+        const isTriggerKey = (key === '0' || key === 'Enter' || key === ' ');
 
-        if (gameOver) {
-            if (isTriggerKey) returnToLobby();
-            return;
-        }
+        if (gameOver) { if (isTriggerKey) returnToLobby(); return; }
 
         if (!gameStarted) {
-            if (event.keyCode === 77 || event.keyCode === 109) { 
-                invisibleCheckbox.checked = !invisibleCheckbox.checked;
-                return;
-            }
-            if (event.keyCode === 84 || event.keyCode === 116) { 
-                timeAttackCheckbox.checked = !timeAttackCheckbox.checked;
-                timerBox.style.display = timeAttackCheckbox.checked ? 'block' : 'none';
-                return;
-            }
+            if (keyLower === 'm') { invisibleCheckbox.checked = !invisibleCheckbox.checked; return; }
+            if (keyLower === 't') { timeAttackCheckbox.checked = !timeAttackCheckbox.checked; timerBox.style.display = timeAttackCheckbox.checked ? 'block' : 'none'; return; }
             if (isTriggerKey) resetGame();
             return;
         }
 
-        if (event.keyCode === 48 || event.keyCode === 96) { 
-            if (gameStarted && !gameOver) openModal(confirmModal);
-            return;
-        }
-
-        if (event.keyCode === 80) { 
-            togglePause();
-            return;
-        }
-
+        if (key === '0' && gameStarted && !gameOver) { openModal(confirmModal); return; }
+        if (keyLower === 'p') { togglePause(); return; }
         if (isPaused) return;
 
-        if (event.keyCode === 37) playerMove(-1);
-        else if (event.keyCode === 39) playerMove(1);
-        else if (event.keyCode === 40) playerDrop();
-        else if (event.keyCode === 38) playerRotate(1);
-        else if (event.keyCode === 32) playerHardDrop();
+        if (key === 'ArrowLeft') playerMove(-1);
+        else if (key === 'ArrowRight') playerMove(1);
+        else if (key === 'ArrowDown') playerDrop();
+        else if (key === 'ArrowUp') playerRotate(1);
+        else if (key === ' ' || key === 'Spacebar') playerHardDrop();
     });
 
-    document.getElementById('t-left').addEventListener('click', () => gameStarted && !isPaused && playerMove(-1));
-    document.getElementById('t-right').addEventListener('click', () => gameStarted && !isPaused && playerMove(1));
-    document.getElementById('t-down').addEventListener('click', () => gameStarted && !isPaused && playerDrop());
-    document.getElementById('t-rotate').addEventListener('click', () => gameStarted && !isPaused && playerRotate(1));
-    document.getElementById('t-drop').addEventListener('click', () => gameStarted && !isPaused && playerHardDrop());
+    // Touch / pointer hold repeat helpers
+    function makeRepeatButton(btn, action) {
+        let timer = null;
+        const start = () => { action(); timer = setInterval(action, 120); };
+        const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+        btn.addEventListener('pointerdown', (e) => { e.preventDefault(); start(); });
+        ['pointerup','pointercancel','pointerleave'].forEach(ev => btn.addEventListener(ev, stop));
+        btn.addEventListener('click', () => action());
+    }
+
+    makeRepeatButton(document.getElementById('t-left'), () => { if (gameStarted && !isPaused) playerMove(-1); });
+    makeRepeatButton(document.getElementById('t-right'), () => { if (gameStarted && !isPaused) playerMove(1); });
+    makeRepeatButton(document.getElementById('t-down'), () => { if (gameStarted && !isPaused) playerDrop(); });
+    document.getElementById('t-rotate').addEventListener('click', () => { if (gameStarted && !isPaused) playerRotate(1); });
+    document.getElementById('t-drop').addEventListener('click', () => { if (gameStarted && !isPaused) playerHardDrop(); });
+
+    // Persist sound preference
+    (function loadPreferences(){
+        const sound = localStorage.getItem(STORAGE_KEYS.SOUND);
+        if (sound !== null) soundCheckbox.checked = !!Number(sound);
+        // update UI in case
+    })();
 
     function resetGame() {
         returnToLobby();
         gameOver = false; gameStarted = true; isPaused = false;
         pauseOverlay.classList.remove('active');
         
-        dropInterval = 1000;
+	// THÊM DÒNG NÀY: Reset tốc độ rơi về level 1 (1000ms) khi chơi game mới
+    	dropInterval = 1000;
 
         setOptionsLockState(true);
 
@@ -872,9 +980,17 @@
         else resetGame();
     });
 
+    // Pause when tab not visible
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && gameStarted && !isPaused && !gameOver) {
+            isPaused = true; pauseOverlay.classList.add('active'); pauseTitle.innerText = "⏸️ TẠM DƯNG";
+        }
+    });
+
     updateResponsiveCanvasSize();
     updateLeaderboardUI();
     returnToLobby();
+})();
 </script>
 </body>
 </html>
